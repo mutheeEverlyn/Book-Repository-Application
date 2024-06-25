@@ -133,10 +133,10 @@ const App: React.FC = () => {
       <table className='book-table'>
         <thead>
           <tr>
-            <th>Title</th>
+            <th>Book Title</th>
             <th>Author</th>
             <th>Year</th>
-            <th>Actions</th>
+           
           </tr>
         </thead>
         <tbody>
