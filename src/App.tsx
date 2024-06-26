@@ -87,13 +87,17 @@ const App: React.FC = () => {
       author: authorRef.current!.value,
       year: yearRef.current!.value,
     };
+    
     dispatch({ type: actionTypes.UPDATE_BOOK, payload: { index, book: updatedBook } });
     titleRef.current!.value = '';
     authorRef.current!.value = '';
     yearRef.current!.value = '';
-    setLocalBooks(books.map((book, idx) => idx === index ? updatedBook : book)); // Update local storage
+    setLocalBooks(books.map((book, idx) => idx === index ? updatedBook : book));
+    if (titleRef.current) {
+      titleRef.current.focus();
+    }
   };
-
+  
   const filteredBooks = books.filter(book =>
     book.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -136,7 +140,7 @@ const App: React.FC = () => {
             <th>Book Title</th>
             <th>Author</th>
             <th>Year</th>
-           
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -147,7 +151,7 @@ const App: React.FC = () => {
               <td>{book.year}</td>
               <td>
                 <button onClick={() => deleteBook(index)}>Delete</button>
-                <button onClick={() => updateBook(index)}>Edit</button>
+                <button onClick={() => updateBook(index)}>Update</button>
               </td>
             </tr>
           ))}
