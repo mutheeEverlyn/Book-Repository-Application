@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useReducer, useRef, useCallback } from 'react';
-import useLocalStorage from './hooks/UseLocalStorage'; 
-
+import axios from 'axios';
+import { BarLoader } from 'react-spinners';
 interface Book {
+  id: number;
   title: string;
   author: string;
-  year: string;
+  year: number;  // Changed to number
 }
 
 // Actions for useReducer
@@ -12,92 +13,130 @@ const actionTypes = {
   ADD_BOOK: 'ADD_BOOK',
   DELETE_BOOK: 'DELETE_BOOK',
   UPDATE_BOOK: 'UPDATE_BOOK',
-  SET_BOOKS: 'SET_BOOKS' as const, // Added SET_BOOKS action type
+  SET_BOOKS: 'SET_BOOKS' as const,
 };
 
 // Reducer function
 const bookReducer = (state: Book[], action: any): Book[] => {
   switch (action.type) {
     case actionTypes.ADD_BOOK:
-      return [...state, action.payload];
+      return [...state, action.payload].sort((a: Book, b: Book) => a.id - b.id); // Sort by ID
     case actionTypes.DELETE_BOOK:
-      return state.filter((_, index) => index !== action.payload);
+      return state.filter((book: Book) => book.id !== action.payload);
     case actionTypes.UPDATE_BOOK:
-      return state.map((book, index) =>
-        index === action.payload.index ? action.payload.book : book
-      );
-    case actionTypes.SET_BOOKS: // Added SET_BOOKS case
-      return action.payload;
+      return state.map((book: Book) =>
+        book.id === action.payload.id ? action.payload : book
+      ).sort((a: Book, b: Book) => a.id - b.id); // Sort by ID after update
+    case actionTypes.SET_BOOKS:
+      return action.payload.sort((a: Book, b: Book) => a.id - b.id); // Sort by ID
     default:
       return state;
   }
 };
 
+
 const App: React.FC = () => {
   const [books, dispatch] = useReducer(bookReducer, []);
-
-  const [localBooks, setLocalBooks] = useLocalStorage<Book[]>('books', [
-    { title: 'Software development', author: 'karanja', year: '2000' },
-    { title: 'Book 2', author: 'malanga', year: '2005' },
-    { title: 'Software project', author: 'Author 3', year: '2010' },
-    { title: 'client side programming', author: 'Alice', year: '2015' },
-    { title: 'server side programming', author: 'Author 5', year: '2020' },
-    { title: 'discrete maths', author: 'Author 6', year: '2021' },
-    { title: 'Mobile application', author: 'Author 7', year: '2022' },
-    { title: 'Book 8', author: 'Author 8', year: '2023' },
-    { title: 'Book 9', author: 'Author 9', year: '2024' },
-    { title: 'Book 10', author: 'Author 10', year: '2025' },
-  ]);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [currentBook, setCurrentBook] = useState<Book | null>(null);
+  const [loading, setLoading] = useState<boolean>(true); // Loading state
 
   const booksPerPage: number = 5;
-
   const titleRef = useRef<HTMLInputElement>(null);
   const authorRef = useRef<HTMLInputElement>(null);
   const yearRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Initialize books from local storage
-    dispatch({ type: actionTypes.SET_BOOKS, payload: localBooks });
-  }, [localBooks]);
+    fetchBooks();
+  }, []);
 
-  const addBook = (e: React.FormEvent<HTMLFormElement>): void => {
-    e.preventDefault();
-    const newBook: Book = {
-      title: titleRef.current!.value,
-      author: authorRef.current!.value,
-      year: yearRef.current!.value,
-    };
-    dispatch({ type: actionTypes.ADD_BOOK, payload: newBook });
-    titleRef.current!.value = '';
-    authorRef.current!.value = '';
-    yearRef.current!.value = '';
-    setLocalBooks([...books, newBook]); // Update local storage
-  };
-
-  const deleteBook = (index: number): void => {
-    dispatch({ type: actionTypes.DELETE_BOOK, payload: index });
-    setLocalBooks(books.filter((_, idx) => idx !== index)); // Update local storage
-  };
-
-  const updateBook = (index: number): void => {
-    const updatedBook: Book = {
-      title: titleRef.current!.value,
-      author: authorRef.current!.value,
-      year: yearRef.current!.value,
-    };
-    
-    dispatch({ type: actionTypes.UPDATE_BOOK, payload: { index, book: updatedBook } });
-    titleRef.current!.value = '';
-    authorRef.current!.value = '';
-    yearRef.current!.value = '';
-    setLocalBooks(books.map((book, idx) => idx === index ? updatedBook : book));
-    if (titleRef.current) {
-      titleRef.current.focus();
+  const fetchBooks = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get<Book[]>('https://booksapi-0z3z.onrender.com/books');
+      dispatch({ type: actionTypes.SET_BOOKS, payload: response.data });
+    } catch (error) {
+      console.error('Error fetching books:', error);
+    } finally {
+      setLoading(false);
     }
   };
-  
+
+  const addBook = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    e.preventDefault();
+    const newBook = {
+      title: titleRef.current!.value,
+      author: authorRef.current!.value,
+      year: Number(yearRef.current!.value), 
+    };
+
+    setLoading(true);
+    try {
+      const response = await axios.post<Book>('https://booksapi-0z3z.onrender.com/books', newBook);
+      dispatch({ type: actionTypes.ADD_BOOK, payload: response.data });
+      resetForm();
+    } catch (error) {
+      console.error('Error adding book:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('Response data:', error.response?.data);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteBook = async (id: number): Promise<void> => {
+    setLoading(true);
+    try {
+      await axios.delete(`https://booksapi-0z3z.onrender.com/books/${id}`);
+      dispatch({ type: actionTypes.DELETE_BOOK, payload: id });
+    } catch (error) {
+      console.error('Error deleting book:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startUpdateBook = (book: Book): void => {
+    setCurrentBook(book);
+    
+    if (titleRef.current) titleRef.current.value = book.title;
+    if (authorRef.current) authorRef.current.value = book.author;
+    if (yearRef.current) yearRef.current.value = book.year.toString();
+  };
+
+  const updateBook = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    e.preventDefault();
+    if (!currentBook) return;
+
+    const updatedBook = {
+      id: currentBook.id,
+      title: titleRef.current!.value,
+      author: authorRef.current!.value,
+      year: Number(yearRef.current!.value), // Convert year to number
+    };
+
+    setLoading(true);
+    try {
+      await axios.put<Book>(`https://booksapi-0z3z.onrender.com/books/${currentBook.id}`, updatedBook);
+      dispatch({ type: actionTypes.UPDATE_BOOK, payload: updatedBook });
+      resetForm();
+      setCurrentBook(null);
+    } catch (error) {
+      console.error('Error updating book:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    if (titleRef.current) titleRef.current.value = '';
+    if (authorRef.current) authorRef.current.value = '';
+    if (yearRef.current) yearRef.current.value = '';
+    setCurrentBook(null);
+  };
+
   const filteredBooks = books.filter(book =>
     book.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -122,11 +161,11 @@ const App: React.FC = () => {
   return (
     <div className='App'>
       <h1>Kirinyaga IT Course Books</h1>
-      <form onSubmit={addBook}>
+      <form onSubmit={currentBook ? updateBook : addBook}>
         <input type="text" placeholder="Book Title" ref={titleRef} required />
         <input type="text" placeholder="Author" ref={authorRef} required />
         <input type="number" placeholder="Year Of Publication" ref={yearRef} required />
-        <button type="submit">Add Book</button>
+        <button type="submit" disabled={loading}>{currentBook ? 'Update Book' : 'Add Book'}</button>
       </form>
       <input
         type="text"
@@ -134,36 +173,39 @@ const App: React.FC = () => {
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
       />
+       {loading && <BarLoader color="blue" height={8}/>}
       <table className='book-table'>
         <thead>
           <tr>
+            <th>ID NO</th>
             <th>Book Title</th>
             <th>Author</th>
-            <th>Year</th>
+            <th>Year Of Publish</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          {paginatedBooks.map((book, index) => (
-            <tr key={index}>
+          {paginatedBooks.map((book) => (
+            <tr key={book.id}>
+              <td>{book.id}</td>
               <td>{book.title}</td>
               <td>{book.author}</td>
               <td>{book.year}</td>
               <td>
-                <button onClick={() => deleteBook(index)}>Delete</button>
-                <button onClick={() => updateBook(index)}>Update</button>
+                <button onClick={() => deleteBook(book.id)} disabled={loading}>Delete</button>
+                <button onClick={() => startUpdateBook(book)} disabled={loading}>Update</button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
       <div className='pagination'>
-        <button onClick={prevPage} disabled={currentPage === 1}>
+        <button onClick={prevPage} disabled={currentPage === 1 || loading}>
           Previous
         </button>
         <button
           onClick={nextPage}
-          disabled={currentPage === Math.ceil(filteredBooks.length / booksPerPage)}
+          disabled={currentPage === Math.ceil(filteredBooks.length / booksPerPage) || loading}
         >
           Next
         </button>
