@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useReducer, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { BarLoader } from 'react-spinners';
+
 interface Book {
   id: number;
   title: string;
@@ -34,13 +35,13 @@ const bookReducer = (state: Book[], action: any): Book[] => {
   }
 };
 
-
 const App: React.FC = () => {
   const [books, dispatch] = useReducer(bookReducer, []);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [currentBook, setCurrentBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState<boolean>(true); // Loading state
+  const [sortCriteria, setSortCriteria] = useState<string>('default'); // Sort criteria
 
   const booksPerPage: number = 5;
   const titleRef = useRef<HTMLInputElement>(null);
@@ -141,16 +142,28 @@ const App: React.FC = () => {
     book.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const paginatedBooks = filteredBooks.slice(
+  const sortedBooks = filteredBooks.sort((a, b) => {
+    if (sortCriteria === 'author') {
+      return a.author.localeCompare(b.author);
+    } else if (sortCriteria === 'title') {
+      return a.title.localeCompare(b.title);
+    } else if (sortCriteria === 'year') {
+      return b.year - a.year;
+    } else {
+      return a.id - b.id;
+    }
+  });
+
+  const paginatedBooks = sortedBooks.slice(
     (currentPage - 1) * booksPerPage,
     currentPage * booksPerPage
   );
 
   const nextPage = useCallback(() => {
-    if (currentPage < Math.ceil(filteredBooks.length / booksPerPage)) {
+    if (currentPage < Math.ceil(sortedBooks.length / booksPerPage)) {
       setCurrentPage(currentPage + 1);
     }
-  }, [currentPage, filteredBooks.length]);
+  }, [currentPage, sortedBooks.length]);
 
   const prevPage = useCallback(() => {
     if (currentPage > 1) {
@@ -173,7 +186,16 @@ const App: React.FC = () => {
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
       />
-       {loading && <BarLoader color="blue" height={8}/>}
+      <span className='filter'>
+        <label htmlFor="sortCriteria">Sort by: </label>
+        <select id="sortCriteria" value={sortCriteria} onChange={(e) => setSortCriteria(e.target.value)}>
+          <option value="default">Default</option>
+          <option value="author">Author</option>
+          <option value="title">Title</option>
+          <option value="year">Year of Publication</option>
+        </select>
+      </span>
+      {loading && <BarLoader color="blue" height={8}/>}
       <table className='book-table'>
         <thead>
           <tr>
@@ -205,7 +227,7 @@ const App: React.FC = () => {
         </button>
         <button
           onClick={nextPage}
-          disabled={currentPage === Math.ceil(filteredBooks.length / booksPerPage) || loading}
+          disabled={currentPage === Math.ceil(sortedBooks.length / booksPerPage) || loading}
         >
           Next
         </button>
