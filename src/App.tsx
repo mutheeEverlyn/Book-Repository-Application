@@ -202,7 +202,7 @@ const App: React.FC = () => {
             <th>ID NO</th>
             <th>Book Title</th>
             <th>Author</th>
-            <th>Year Of Publication</th>
+            <th>Year Of Publish</th>
             <th></th>
           </tr>
         </thead>
